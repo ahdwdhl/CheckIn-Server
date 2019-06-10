@@ -4,18 +4,11 @@ import (
 	"../cache"
 	"../utils"
 	"fmt"
-	"github.com/axgle/mahonia"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-)
-
-var logger *log.Logger = nil
-var (
-	url    string
-	ckFile string
 )
 
 func IndexHtml(w http.ResponseWriter, r *http.Request) {
@@ -49,57 +42,28 @@ func Check(w http.ResponseWriter, r *http.Request) {
 	for k, v := range r.Form {
 		Rdatas[k] = strings.Join(v, "")
 	}
-	Case := Rdatas["s"]
-	if Case == "1" {
-		url = "http://ssr.bingly.cn"
-		ckFile = "bl.json"
-	} else {
-		url = "http://ssr.guopao.tk"
-		ckFile = "gp.json"
+	Case := Rdatas["s"][0] - '1'
+	if Case >= 3 || Case < 0 {
+		return
 	}
-	Pdatas := make(map[string]string)
-	Pdatas["email"] = "993534609@qq.com"
-	Pdatas["passwd"] = "lyf110110"
-	Pdatas["code"] = ""
+	_url, _ckFile = Urls[Case], CookieFiles[Case]
 
-	_h, r_cookie := cache.ReadCookie(ckFile)
-
+	_h, r_cookie := cache.ReadCookie(_ckFile)
 	if !_h || r_cookie == nil {
-		logger.Println(url, " cookie 读取失败...")
-		//请求url
-		body, _ := utils.GetUrlHtml(url)
-		time.Sleep(100 * 5)
-		logger.Println(url, "打开主页.....")
-		body, _ = utils.PostUrlHtml(url+"/auth/login", Pdatas)
-		time.Sleep(100 * 5)
-		logger.Println(url, "登录中.....")
-
-		body, _ = utils.PostUrlHtml(url+"/user/checkin", nil)
-		dec := mahonia.NewDecoder("gbk")
-		body = dec.ConvertString(body)
-		body = UnicodeToString(body)
-
-		bodyHtml := "<body> " + body + "</body>"
-		logger.Println(body)
-
+		NoCahce()
+		bodyHtml := HasCache()
 		cache.InitCookies()
-		cache.WtiteCookie(ckFile)
-		logger.Println(url, "cookie 写入成功..")
-		fmt.Fprintf(w, bodyHtml)
+		cache.WtiteCookie(_ckFile)
+		logger.Println(_url, "cookie 写入成功..")
+		_, _ = fmt.Fprintf(w, bodyHtml)
 	} else {
-		_, _ = utils.GetUrlHtml(url + "/user/checkin")
+		_, _ = utils.GetUrlHtml(_url + "/user")
 		time.Sleep(100 * 5)
 		utils.SetCookieJar(r_cookie)
+		logger.Println(_url, "cookie 设置成功.....")
 
-		logger.Println(url, "cookie 设置成功.....")
-
-		body, _ := utils.PostUrlHtml(url+"/user/checkin", nil)
-		dec := mahonia.NewDecoder("gbk")
-		body = dec.ConvertString(body)
-		body = UnicodeToString(body)
-		bodyHtml := "<body> " + body + "</body>"
-		logger.Println(body)
-		fmt.Fprintf(w, bodyHtml)
+		bodyHtml := HasCache()
+		_, _ = fmt.Fprintf(w, bodyHtml)
 	}
 
 }
@@ -112,5 +76,6 @@ func BindAPI() {
 func Start(g *log.Logger) {
 	BindAPI()
 	logger = g
+	InitGlobalValue()
 	_ = http.ListenAndServe(":8080", nil)
 }
